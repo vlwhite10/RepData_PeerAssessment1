@@ -1,25 +1,126 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research Course Project 1"
+author: "vlwhite10"
+date: "September 3, 2019"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+# Read In Libraries
+```{r libraries, include=TRUE, warning=FALSE, results='hide'}
+library(dplyr)
+library(ggplot2)
+```
+
+# Read In Data
+```{r data}
+ActivityData<-read.csv("activity.csv")
+```
 
 
+# What is the mean number of steps taken per day?
+```{r TotalSteps, results='hide'}
+  #Sum the amount of steps each day
+  ActivityData_by_Date<- ActivityData %>%
+    group_by(factor(date)) %>%
+    summarise(total.steps = sum(steps, na.rm=T))
 
-## What is mean total number of steps taken per day?
+  #Create Histogram of the Total Steps taken each Day
+  ggplot(ActivityData_by_Date, aes(total.steps) ) + 
+    geom_histogram(bins = 20) +
+    labs(x = "Total Steps Each Day", y = "Count of Days", title="Histogram of Total Steps Each Day")
+```
 
+```{r MeanAndMedianSteps}
+  meanSteps<-round(mean(ActivityData_by_Date$total.steps), digits = 0)
+  medianSteps<-round(median(ActivityData_by_Date$total.steps), digits=0)
+```
+  
+The mean amount of steps taken per day is `r meanSteps`. The median amount of steps taken per day is `r medianSteps`.
 
+#What is the average daily activity pattern?
+```{r AverageStepsPerInterval, results='hide'}
+  #Average amount of steps in each interval
+  ActivityData_by_Interval<- ActivityData %>%
+    group_by(interval) %>%
+    summarise(average.steps = mean(steps, na.rm=T))
 
-## What is the average daily activity pattern?
+  #Create Line graph for the average amount of steps taken in each 5-min interval
+  ggplot(ActivityData_by_Interval, aes(y=average.steps, x=interval) ) + 
+    geom_line() +
+    labs(x = "5-min Interval", y = "Average Steps Taken", title="Average Steps Taken for each Interval")
+  
+  #Interval with maximum number of steps
+  max_Steps<-ActivityData_by_Interval[which.max(ActivityData_by_Interval$average.steps),]
 
+```
+  
+  The `r max_Steps$interval` interval contains the maximum amount of steps on average.
+  
+#Imputing Missing Values
+```{R Count_missing_Values}
+  #Count of missing values in data set
+  Count_NA <- sum(is.na(ActivityData$steps))
+```
 
+There are `r Count_NA` intervals with missing step counts. 
 
-## Imputing missing values
+```{R Replace_missing_values}
+  #Identify Rows missing step values
+  ActivityData_OnlyNA <- ActivityData[is.na(ActivityData$steps),]
 
+  #Merge Intervals with missing step values to the interval average steps
+  ActivityData_ReplacedNA <- merge(ActivityData_OnlyNA, ActivityData_by_Interval, by=c("interval"))
+  ActivityData_ReplacedNA <- ActivityData_ReplacedNA[c("average.steps", "date", "interval")]
+  names(ActivityData_ReplacedNA) <- c("steps", "date", "interval")
+  
+  #Data set without missing step values
+  ActivityData_NoNA <- ActivityData[is.na(ActivityData$steps)==FALSE,]
+  
+  #Bind data with replaced NAs and without NAs
+  ActivityData_NoNA <- rbind(ActivityData_NoNA, ActivityData_ReplacedNA)
+  
+  
+  ActivityData_NoNA_by_Date<- ActivityData_NoNA %>%
+  group_by(factor(date)) %>%
+  summarise(total.steps = sum(steps, na.rm=T))
+```
 
+```{R Histogram with NA replaced with interval mean}
 
-## Are there differences in activity patterns between weekdays and weekends?
+  #Create Histogram of the Total Steps taken each Day
+  ggplot(ActivityData_NoNA_by_Date, aes(total.steps) ) + 
+    geom_histogram(bins = 20) +
+    labs(x = "Total Steps Each Day", y = "Count of Days", title="Histogram of Total Steps Each Day (NA values replaced with interval mean)")
+```
+
+```{R Mean and Medium of Dataset with NA replaced by interal mean}
+  NoNAMean <- round(mean(ActivityData_NoNA_by_Date$total.steps), digit=0)
+  NoNAMedian <- round(median(ActivityData_NoNA_by_Date$total.steps), digit = 0)
+  
+  MeanDiff <- NoNAMean - meanSteps
+  MedianDiff <- NoNAMedian - medianSteps
+```
+
+The mean and median is shifted to the right when imputing the missing values with the mean of the interval. The mean shifts from `r meanSteps` to `r NoNAMean` a difference of `r MeanDiff`. The median shifts from `r medianSteps` to `r NoNAMedian` a difference of `r MedianDiff`. 
+
+#Average Steps by Weekday versus Weekend
+
+```{R NoNA data set with weekday and weekend identifier}
+  ActivityData_NoNA$AsDate <- as.Date(ActivityData_NoNA$date, format = "%Y-%m-%d")
+  
+  ActivityData_NoNA$Weekday <- ifelse(weekdays(ActivityData_NoNA$AsDate) == 'Saturday' | weekdays(ActivityData_NoNA$AsDate) == 'Sunday', 'weekend', 'weekday')
+  
+  ActivityData_NoNA_by_Weekday<- ActivityData_NoNA %>%
+    group_by(interval, Weekday) %>%
+    summarise(average.steps = mean(steps, na.rm=T))
+  
+  ggplot(ActivityData_NoNA_by_Weekday, aes(interval, average.steps)) +
+    geom_line()+ggtitle("Average Steps per Interval for Weekdays versus Weekends")+
+    xlab("Interval") + ylab("Average Amount of Steps") +facet_grid(Weekday~.)
+  
+```
+
